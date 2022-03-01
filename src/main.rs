@@ -1,7 +1,8 @@
 use futures::StreamExt;
 // use log::{info, warn};
 use voyager::{
-    scraper::Selector, Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper,
+    scraper::{ElementRef, Selector},
+    Collector, Crawler, CrawlerConfig, RequestDelay, Response, Scraper,
 };
 
 // Declare your scraper, with all the selectors etc.
@@ -12,6 +13,19 @@ struct ModularGridScraper {
     width_selector: Selector,
     depth_selector: Selector,
     max_page: usize,
+}
+
+impl ModularGridScraper {
+    fn parse_width(&self, width: ElementRef) -> Option<u8> {
+        let width_inner = width.inner_html();
+        let mut split_width = width_inner.split_whitespace();
+        let width = split_width.next().unwrap();
+
+        match width.parse::<u8>() {
+            Ok(width) => Some(width),
+            Err(_) => None,
+        }
+    }
 }
 
 impl Default for ModularGridScraper {
@@ -42,7 +56,7 @@ enum ModularGridState {
 struct Module {
     name: String,
     manufacturer: String,
-    width: String,
+    width: Option<u8>,
     depth: String,
 }
 
@@ -95,7 +109,7 @@ impl Scraper for ModularGridScraper {
                     let entry = Module {
                         name: name.inner_html(),
                         manufacturer: manufacturer.inner_html(),
-                        width: width.inner_html(),
+                        width: self.parse_width(width),
                         depth: depth.inner_html(),
                     };
                     return Ok(Some(entry));
