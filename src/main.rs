@@ -16,13 +16,27 @@ struct ModularGridScraper {
 }
 
 impl ModularGridScraper {
-    fn parse_width(&self, width: ElementRef) -> Option<u8> {
-        let width_inner = width.inner_html();
+    fn parse_width(&self, width_elem: ElementRef) -> Option<u8> {
+        let width_inner = width_elem.inner_html();
         let mut split_width = width_inner.split_whitespace();
         let width = split_width.next().unwrap();
 
         match width.parse::<u8>() {
             Ok(width) => Some(width),
+            Err(_) => None,
+        }
+    }
+
+    fn parse_depth(&self, depth_elem: ElementRef) -> Option<u8> {
+        let depth_inner = depth_elem.inner_html();
+        let mut space_check = depth_inner.split_whitespace();
+        let s = space_check.next().unwrap();
+
+        let mut space_check = s.split("&");
+        let depth = space_check.next().unwrap();
+
+        match depth.parse::<u8>() {
+            Ok(depth) => Some(depth),
             Err(_) => None,
         }
     }
@@ -57,7 +71,7 @@ struct Module {
     name: String,
     manufacturer: String,
     width: Option<u8>,
-    depth: String,
+    depth: Option<u8>,
 }
 
 impl Scraper for ModularGridScraper {
@@ -102,15 +116,15 @@ impl Scraper for ModularGridScraper {
                         .select(&self.module_manufacturer_selector)
                         .next()
                         .unwrap();
-                    let width = html.select(&self.width_selector).next().unwrap();
-                    let depth = html.select(&self.depth_selector).next().unwrap();
+                    let width_ref = html.select(&self.width_selector).next().unwrap();
+                    let depth_ref = html.select(&self.depth_selector).next().unwrap();
 
                     // scrape the entry
                     let entry = Module {
                         name: name.inner_html(),
                         manufacturer: manufacturer.inner_html(),
-                        width: self.parse_width(width),
-                        depth: depth.inner_html(),
+                        width: self.parse_width(width_ref),
+                        depth: self.parse_depth(depth_ref),
                     };
                     return Ok(Some(entry));
                 }
