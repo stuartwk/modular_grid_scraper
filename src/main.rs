@@ -12,7 +12,17 @@ struct ModularGridScraper {
     module_manufacturer_selector: Selector,
     width_selector: Selector,
     depth_selector: Selector,
+    positive_12_selector: Selector,
+    negative_12_selector: Selector,
+    positive_5_selector: Selector,
     max_page: usize,
+}
+
+#[derive(Debug)]
+struct CurrentDraw {
+    positive_12: Option<u8>,
+    negative_12: Option<u8>,
+    positive_5: Option<u8>,
 }
 
 impl ModularGridScraper {
@@ -40,6 +50,18 @@ impl ModularGridScraper {
             Err(_) => None,
         }
     }
+
+    fn parse_current_draw(&self, elem: ElementRef) -> Option<u8> {
+        let raw_val = elem.inner_html();
+        let mut split_whitespace = raw_val.split_whitespace();
+
+        let width = split_whitespace.next().unwrap();
+
+        match width.parse::<u8>() {
+            Ok(width) => Some(width),
+            Err(_) => None,
+        }
+    }
 }
 
 impl Default for ModularGridScraper {
@@ -51,8 +73,22 @@ impl Default for ModularGridScraper {
                 ".module-view-header .sub-header h2 a span",
             )
             .unwrap(),
-            width_selector: Selector::parse(".box-specs dl dd:first-of-type").unwrap(),
-            depth_selector: Selector::parse(".box-specs dl dd:nth-of-type(2)").unwrap(),
+            width_selector: Selector::parse(".box-specs div:first-of-type dl dd:first-of-type")
+                .unwrap(),
+            depth_selector: Selector::parse(".box-specs div:first-of-type dl dd:nth-of-type(2)")
+                .unwrap(),
+            positive_12_selector: Selector::parse(
+                ".box-specs div:nth-of-type(2) dl dd:first-of-type",
+            )
+            .unwrap(),
+            negative_12_selector: Selector::parse(
+                ".box-specs div:nth-of-type(2) dl dd:nth-of-type(2)",
+            )
+            .unwrap(),
+            positive_5_selector: Selector::parse(
+                ".box-specs div:nth-of-type(2) dl dd:nth-of-type(3)",
+            )
+            .unwrap(),
             max_page: 2,
         }
     }
@@ -72,6 +108,7 @@ struct Module {
     manufacturer: String,
     width: Option<u8>,
     depth: Option<u8>,
+    current: CurrentDraw,
 }
 
 impl Scraper for ModularGridScraper {
@@ -116,15 +153,42 @@ impl Scraper for ModularGridScraper {
                         .select(&self.module_manufacturer_selector)
                         .next()
                         .unwrap();
-                    let width_ref = html.select(&self.width_selector).next().unwrap();
-                    let depth_ref = html.select(&self.depth_selector).next().unwrap();
+                    let width = match html.select(&self.width_selector).next() {
+                        Some(elem) => self.parse_width(elem),
+                        None => None,
+                    };
+
+                    let depth = match html.select(&self.depth_selector).next() {
+                        Some(elem) => self.parse_depth(elem),
+                        None => None,
+                    };
+
+                    let positive_12 = match html.select(&self.positive_12_selector).next() {
+                        Some(elem) => self.parse_current_draw(elem),
+                        None => None,
+                    };
+
+                    let negative_12 = match html.select(&self.negative_12_selector).next() {
+                        Some(elem) => self.parse_current_draw(elem),
+                        None => None,
+                    };
+
+                    let positive_5 = match html.select(&self.positive_5_selector).next() {
+                        Some(elem) => self.parse_current_draw(elem),
+                        None => None,
+                    };
 
                     // scrape the entry
                     let entry = Module {
                         name: name.inner_html(),
                         manufacturer: manufacturer.inner_html(),
-                        width: self.parse_width(width_ref),
-                        depth: self.parse_depth(depth_ref),
+                        width: width,
+                        depth: depth,
+                        current: CurrentDraw {
+                            positive_12: positive_12,
+                            negative_12: negative_12,
+                            positive_5: positive_5,
+                        },
                     };
                     return Ok(Some(entry));
                 }
@@ -137,9 +201,7 @@ impl Scraper for ModularGridScraper {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // env_logger::init();
-
-    // only fulfill requests to `news.ycombinator.com`
+    // only fulfill requests to `www.modulargrid.net`
     let config = CrawlerConfig::default().allow_domain_with_delay(
         "www.modulargrid.net",
         // add a delay between requests
@@ -154,8 +216,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     while let Some(output) = collector.next().await {
-        let post = output?;
-        dbg!(post);
+        let module = output?;
+        dbg!(module);
     }
 
     Ok(())
